@@ -34,7 +34,7 @@ class PascalVOCDataset(Dataset):
         image_path = self.image_paths[idx]
         label_path = self.label_paths[idx]
         image = Image.open(image_path).convert("RGB")
-        label = Image.open(label_path).convert('L')
+        label = Image.open(label_path).convert('P')
         if self.image_transform:
             image = self.image_transform(image)
         if self.label_transform:
@@ -47,12 +47,13 @@ def dataloader(batch_size):
     # 데이터 전처리
     image_transform = transforms.Compose([
         transforms.Resize((224, 224)),
-        transforms.ToTensor()
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
     label_transform = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.ToTensor()
+        transforms.Resize((224, 224), interpolation=transforms.InterpolationMode.NEAREST),
+        transforms.PILToTensor()
     ])
 
     # 경로 설정

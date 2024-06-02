@@ -6,7 +6,7 @@ import os
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 from PIL import Image
-from model_loader import load_model
+from loader import ConfigLoader
 from data_loader import dataloader
 import wandb
 
@@ -20,10 +20,11 @@ config = {
     'epochs': num_epochs,
     'classes': 21,
     'batch_size': batch_size,
-    'learning_rate': 1e-3,
     'dataset': 'VOC2012',
     'architecture': 'U2NET'
 }
+
+loader = ConfigLoader(model_name='u2net', num_classes=21)
 
 
 class SegMetrics:
@@ -37,7 +38,9 @@ class SegMetrics:
     def update(self, preds, labels):
         for pred, label in zip(preds, labels):
             pred = torch.argmax(F.softmax(pred, dim=0), dim=0).cpu().detach().flatten().numpy()
+            print(pred)
             label = label.flatten().cpu().detach().numpy()
+            print(label)
 
             mask = (label >= 0) & (label < self.num_classes)
             category = np.bincount(
@@ -57,10 +60,11 @@ class SegMetrics:
 
 # 모델 학습 및 평가 코드
 def train_model():
-    wandb.init(project='PBL4', entity='Pjumo', config=config)
-    model = load_model('u2net', num_classes=21).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-    criterion = nn.CrossEntropyLoss(ignore_index=255)
+    wandb.init(project='PBL4', entity='Pjumo', name='U2NET_basic', config=config)
+    model = loader.load_model().to(device)
+    optimizer = loader.load_optim()
+    criterion = loader.load_loss_func()
+
     train_loader, val_loader = dataloader(batch_size)
     cnt_progress = len(train_loader) // 30
     wandb.watch(model, criterion, log='all', log_freq=10)
@@ -72,8 +76,14 @@ def train_model():
             images = images.to(device)
             labels = labels.to(device)
             optimizer.zero_grad()
-            outputs = model(images)
-            loss = criterion(outputs, labels)
+
+            if loader.loss_cnt == 7:
+                outputs, d1, d2, d3, d4, d5, d6 = model(images)
+                loss = criterion(outputs, d1, d2, d3, d4, d5, d6, labels)
+            else:
+                outputs = model(images)
+                loss = criterion(outputs, labels)
+
             loss.backward()
             optimizer.step()
 
@@ -93,8 +103,14 @@ def train_model():
             for images, labels in val_loader:
                 images = images.to(device)
                 labels = labels.to(device)
-                outputs = model(images)
-                loss = criterion(outputs, labels)
+
+                if loader.loss_cnt == 7:
+                    outputs, d1, d2, d3, d4, d5, d6 = model(images)
+                    loss = criterion(outputs, d1, d2, d3, d4, d5, d6, labels)
+                else:
+                    outputs = model(images)
+                    loss = criterion(outputs, labels)
+
                 val_loss += loss.item()
                 metric.update(outputs, labels)
 
@@ -106,5 +122,4 @@ def train_model():
 
 
 if __name__ == '__main__':
-    # 모델 학습
     train_model()
