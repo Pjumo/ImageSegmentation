@@ -18,15 +18,15 @@ class REBNCONV(nn.Module):
         return xout
 
 
-## upsample tensor 'src' to have the same spatial size with tensor 'tar'
+# upsample tensor 'src' to have the same spatial size with tensor 'tar'
 def _upsample_like(src, tar):
-    src = F.upsample(src, size=tar.shape[2:], mode='bilinear')
+    src = nn.Upsample(size=tar.shape[2:], mode='bilinear')(src)
 
     return src
 
 
 ### RSU-7 ###
-class RSU7(nn.Module):  # UNet07DRES(nn.Module):
+class RSU7(nn.Module):
 
     def __init__(self, in_ch=3, mid_ch=12, out_ch=3):
         super(RSU7, self).__init__()
@@ -103,7 +103,7 @@ class RSU7(nn.Module):  # UNet07DRES(nn.Module):
 
 
 ### RSU-6 ###
-class RSU6(nn.Module):  # UNet06DRES(nn.Module):
+class RSU6(nn.Module):
 
     def __init__(self, in_ch=3, mid_ch=12, out_ch=3):
         super(RSU6, self).__init__()
@@ -171,7 +171,7 @@ class RSU6(nn.Module):  # UNet06DRES(nn.Module):
 
 
 ### RSU-5 ###
-class RSU5(nn.Module):  # UNet05DRES(nn.Module):
+class RSU5(nn.Module):
 
     def __init__(self, in_ch=3, mid_ch=12, out_ch=3):
         super(RSU5, self).__init__()
@@ -229,7 +229,7 @@ class RSU5(nn.Module):  # UNet05DRES(nn.Module):
 
 
 ### RSU-4 ###
-class RSU4(nn.Module):  # UNet04DRES(nn.Module):
+class RSU4(nn.Module):
 
     def __init__(self, in_ch=3, mid_ch=12, out_ch=3):
         super(RSU4, self).__init__()
@@ -277,7 +277,7 @@ class RSU4(nn.Module):  # UNet04DRES(nn.Module):
 
 
 ### RSU-4F ###
-class RSU4F(nn.Module):  # UNet04FRES(nn.Module):
+class RSU4F(nn.Module):
 
     def __init__(self, in_ch=3, mid_ch=12, out_ch=3):
         super(RSU4F, self).__init__()
@@ -412,7 +412,8 @@ class U2NET(nn.Module):
 
         d0 = self.outconv(torch.cat((d1, d2, d3, d4, d5, d6), 1))
 
-        return F.sigmoid(d0), F.sigmoid(d1), F.sigmoid(d2), F.sigmoid(d3), F.sigmoid(d4), F.sigmoid(d5), F.sigmoid(d6)
+        return torch.sigmoid(d0), torch.sigmoid(d1), torch.sigmoid(d2), torch.sigmoid(d3), torch.sigmoid(d4), \
+            torch.sigmoid(d5), torch.sigmoid(d6)
 
 
 class U2NETP(nn.Module):
@@ -515,8 +516,9 @@ class U2NETP(nn.Module):
 
         d0 = self.outconv(torch.cat((d1, d2, d3, d4, d5, d6), 1))
 
-        return F.sigmoid(d0), F.sigmoid(d1), F.sigmoid(d2), F.sigmoid(d3), F.sigmoid(d4), F.sigmoid(d5), F.sigmoid(d6)
+        return torch.sigmoid(d0), torch.sigmoid(d1), torch.sigmoid(d2), torch.sigmoid(d3), torch.sigmoid(d4), \
+            torch.sigmoid(d5), torch.sigmoid(d6)
 
 
-def u2net_caller(num_classes, is_small=True):
-    return U2NETP(in_ch=3, out_ch=num_classes) if is_small is True else U2NET(in_ch=3, out_ch=num_classes)
+def u2net_caller(num_classes):
+    return U2NET(in_ch=3, out_ch=num_classes)

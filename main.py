@@ -24,7 +24,21 @@ config = {
     'architecture': 'U2NET'
 }
 
-loader = ConfigLoader(model_name='u2net', num_classes=21)
+loader = ConfigLoader(model_name='unet', num_classes=21)
+wandb_name = 'UNET_basic'
+
+
+def label_to_one_hot_label(
+        labels: torch.Tensor,
+        num_classes: int,
+        ignore_index: int
+):
+    shape = labels.shape
+    one_hot = torch.zeros((shape[0], ignore_index + 1) + shape[1:], device=device)
+    one_hot = one_hot.scatter_(1, labels.unsqueeze(1), 1.0)
+    ret = torch.split(one_hot, [num_classes, ignore_index + 1 - num_classes], dim=1)[0]
+
+    return ret
 
 
 class SegMetrics:
@@ -38,9 +52,7 @@ class SegMetrics:
     def update(self, preds, labels):
         for pred, label in zip(preds, labels):
             pred = torch.argmax(F.softmax(pred, dim=0), dim=0).cpu().detach().flatten().numpy()
-            print(pred)
             label = label.flatten().cpu().detach().numpy()
-            print(label)
 
             mask = (label >= 0) & (label < self.num_classes)
             category = np.bincount(
@@ -60,7 +72,7 @@ class SegMetrics:
 
 # 모델 학습 및 평가 코드
 def train_model():
-    wandb.init(project='PBL4', entity='Pjumo', name='U2NET_basic', config=config)
+    wandb.init(project='PBL4', entity='Pjumo', name=wandb_name, config=config)
     model = loader.load_model().to(device)
     optimizer = loader.load_optim()
     criterion = loader.load_loss_func()
@@ -71,10 +83,12 @@ def train_model():
 
     for epoch in range(num_epochs):
         model.train()
-
+        total_train_loss = 0
         for cnt, (images, labels) in enumerate(train_loader):
             images = images.to(device)
-            labels = labels.to(device)
+            labels = labels.to(device, dtype=torch.int64)
+            labels = label_to_one_hot_label(labels, 21, ignore_index=255)
+            criterion = criterion.cuda()
             optimizer.zero_grad()
 
             if loader.loss_cnt == 7:
@@ -87,6 +101,7 @@ def train_model():
             loss.backward()
             optimizer.step()
 
+            total_train_loss += loss.item()
             if cnt % cnt_progress == 0:
                 print(f'\rEpoch {epoch + 1} [', end='')
                 for prog in range(cnt // cnt_progress):
@@ -95,6 +110,9 @@ def train_model():
                     print('□', end='')
                 print(']', end='')
 
+        total_train_loss /= len(train_loader)
+        print(f' - Train loss: {total_train_loss:.4f}')
+
         model.eval()
         metric = SegMetrics(num_classes=21)
         metric.reset()
@@ -102,14 +120,20 @@ def train_model():
             val_loss = 0
             for images, labels in val_loader:
                 images = images.to(device)
-                labels = labels.to(device)
+                labels = labels.to(device, dtype=torch.int64)
+                labels_one_hot = label_to_one_hot_label(labels, 21, ignore_index=255)
 
                 if loader.loss_cnt == 7:
                     outputs, d1, d2, d3, d4, d5, d6 = model(images)
-                    loss = criterion(outputs, d1, d2, d3, d4, d5, d6, labels)
+                    loss = criterion(outputs, d1, d2, d3, d4, d5, d6, labels_one_hot)
                 else:
                     outputs = model(images)
-                    loss = criterion(outputs, labels)
+                    if val_loss == 0:
+                        output_ = outputs[0].numpy()
+                        output_concat = np.argmax(output_, axis=1)
+                        img = Image.fromarray(output_concat, mode='P')
+                        img.show()
+                    loss = criterion(outputs, labels_one_hot)
 
                 val_loss += loss.item()
                 metric.update(outputs, labels)

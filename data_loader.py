@@ -52,7 +52,7 @@ def dataloader(batch_size):
     ])
 
     label_transform = transforms.Compose([
-        transforms.Resize((224, 224), interpolation=transforms.InterpolationMode.NEAREST),
+        transforms.Resize((224, 224)),
         transforms.PILToTensor()
     ])
 

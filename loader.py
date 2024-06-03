@@ -1,4 +1,4 @@
-import models.u2net as u2net
+from models import u2net, unet
 import torch.nn as nn
 import torch
 
@@ -13,8 +13,6 @@ def muti_celoss_func(d0, d1, d2, d3, d4, d5, d6, labels_v):
     d4 = torch.argmax(d4, dim=1).float()
     d5 = torch.argmax(d5, dim=1).float()
     d6 = torch.argmax(d6, dim=1).float()
-    labels_v[labels_v == 255] = 0
-    labels_v = torch.tensor(labels_v, dtype=torch.float16, requires_grad=True)
 
     loss0 = celoss(d0, labels_v)
     loss1 = celoss(d1, labels_v)
@@ -34,7 +32,9 @@ class ConfigLoader:
         self.num_classes = num_classes
 
         if self.model_name == 'u2net':
-            self.model = u2net.u2net_caller(num_classes, is_small=True)
+            self.model = u2net.u2net_caller(num_classes)
+        elif self.model_name == 'unet':
+            self.model = unet.unet_caller(num_classes)
         else:
             self.model = None
 
@@ -49,11 +49,15 @@ class ConfigLoader:
     def load_optim(self):
         if self.model_name == 'u2net':
             return torch.optim.Adam(self.model.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0)
+        elif self.model_name == 'unet':
+            return torch.optim.Adam(self.model.parameters(), lr=0.0001, betas=(0.5, 0.99))
         else:
             return None
 
     def load_loss_func(self):
         if self.model_name == 'u2net':
             return muti_celoss_func
+        elif self.model_name == 'unet':
+            return celoss
         else:
             return None
