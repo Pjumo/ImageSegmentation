@@ -32,7 +32,7 @@ class UNet(nn.Module):
         self.UpConv4 = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2)
 
     def forward(self, x):
-        ## contracting path(left side)
+        # contracting path(left side)
         down1 = self.down1(x)
         MaxPool1 = self.MaxPool(down1)
 

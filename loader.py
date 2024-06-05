@@ -1,19 +1,32 @@
-from models import u2net, unet
+from models import u2net, unet, deeplabv3
 import torch.nn as nn
 import torch
+import torch.nn.functional as F
+
+
+class FocalLoss(nn.Module):
+    def __init__(self, alpha=1, gamma=0, size_average=True, ignore_index=255):
+        super(FocalLoss, self).__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+        self.ignore_index = ignore_index
+        self.size_average = size_average
+
+    def forward(self, inputs, targets):
+        ce_loss = F.cross_entropy(
+            inputs, targets, reduction='none')
+        pt = torch.exp(-ce_loss)
+        focal_loss = self.alpha * (1 - pt) ** self.gamma * ce_loss
+        if self.size_average:
+            return focal_loss.mean()
+        else:
+            return focal_loss.sum()
+
 
 celoss = nn.CrossEntropyLoss()
 
 
 def muti_celoss_func(d0, d1, d2, d3, d4, d5, d6, labels_v):
-    d0 = torch.argmax(d0, dim=1).float()
-    d1 = torch.argmax(d1, dim=1).float()
-    d2 = torch.argmax(d2, dim=1).float()
-    d3 = torch.argmax(d3, dim=1).float()
-    d4 = torch.argmax(d4, dim=1).float()
-    d5 = torch.argmax(d5, dim=1).float()
-    d6 = torch.argmax(d6, dim=1).float()
-
     loss0 = celoss(d0, labels_v)
     loss1 = celoss(d1, labels_v)
     loss2 = celoss(d2, labels_v)
@@ -35,6 +48,10 @@ class ConfigLoader:
             self.model = u2net.u2net_caller(num_classes)
         elif self.model_name == 'unet':
             self.model = unet.unet_caller(num_classes)
+        elif self.model_name == 'deeplabv3plus_resnet50':
+            self.model = deeplabv3.deeplabv3plus_resnet50(num_classes=num_classes)
+        elif self.model_name == 'deeplabv3plus_resnet101':
+            self.model = deeplabv3.deeplabv3plus_resnet101(num_classes=num_classes)
         else:
             self.model = None
 
@@ -50,7 +67,9 @@ class ConfigLoader:
         if self.model_name == 'u2net':
             return torch.optim.Adam(self.model.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0)
         elif self.model_name == 'unet':
-            return torch.optim.Adam(self.model.parameters(), lr=0.0001, betas=(0.5, 0.99))
+            return torch.optim.Adam(self.model.parameters(), lr=0.001, betas=(0.5, 0.99))
+        elif self.model_name in ['deeplabv3plus_resnet50', 'deeplabv3plus_resnet101']:
+            return torch.optim.Adam(self.model.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0)
         else:
             return None
 
@@ -59,5 +78,7 @@ class ConfigLoader:
             return muti_celoss_func
         elif self.model_name == 'unet':
             return celoss
+        elif self.model_name in ['deeplabv3plus_resnet50', 'deeplabv3plus_resnet101']:
+            return FocalLoss()  # Use FocalLoss for deeplabv3plus models
         else:
             return None

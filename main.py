@@ -21,11 +21,11 @@ config = {
     'classes': 21,
     'batch_size': batch_size,
     'dataset': 'VOC2012',
-    'architecture': 'U2NET'
+    'architecture': 'UNET'
 }
 
-loader = ConfigLoader(model_name='unet', num_classes=21)
-wandb_name = 'UNET_basic'
+loader = ConfigLoader(model_name='deeplabv3plus_resnet50', num_classes=21)
+wandb_name = 'deeplabv3plus_resnet50'
 
 
 def label_to_one_hot_label(
@@ -41,7 +41,7 @@ def label_to_one_hot_label(
     return ret
 
 
-class SegMetrics:
+class SegMetrics():
     def __init__(self, num_classes):
         self.num_classes = num_classes
         self.confusion_matrix = np.zeros((num_classes, num_classes))
@@ -56,8 +56,8 @@ class SegMetrics:
 
             mask = (label >= 0) & (label < self.num_classes)
             category = np.bincount(
-                label[mask] * self.num_classes + pred[mask],
-                minlength=self.num_classes ** 2
+                label[mask] * self.num_classes + pred[mask]
+                , minlength=self.num_classes ** 2
             ).reshape(self.num_classes, self.num_classes)
             self.confusion_matrix += category
 
@@ -84,11 +84,11 @@ def train_model():
     for epoch in range(num_epochs):
         model.train()
         total_train_loss = 0
-        for cnt, (images, labels) in enumerate(train_loader):
+        for cnt, (images, labels, _) in enumerate(train_loader):
             images = images.to(device)
             labels = labels.to(device, dtype=torch.int64)
             labels = label_to_one_hot_label(labels, 21, ignore_index=255)
-            criterion = criterion.cuda()
+            criterion = criterion
             optimizer.zero_grad()
 
             if loader.loss_cnt == 7:
@@ -118,30 +118,44 @@ def train_model():
         metric.reset()
         with torch.no_grad():
             val_loss = 0
-            for images, labels in val_loader:
+            for images, labels, palette in val_loader:
                 images = images.to(device)
                 labels = labels.to(device, dtype=torch.int64)
                 labels_one_hot = label_to_one_hot_label(labels, 21, ignore_index=255)
 
                 if loader.loss_cnt == 7:
                     outputs, d1, d2, d3, d4, d5, d6 = model(images)
+                    if val_loss == 0:
+                        output_ = outputs[0].numpy()
+                        output_concat = np.argmax(output_, axis=1)
+                        img = Image.fromarray(np.uint8(output_concat), mode='P')
+                        palette_with_alpha_values = []
+                        for i in range(768):
+                            color = palette[i].numpy()[0]
+                            palette_with_alpha_values.append(color)
+                        img.putpalette(palette_with_alpha_values, "RGB")
                     loss = criterion(outputs, d1, d2, d3, d4, d5, d6, labels_one_hot)
                 else:
                     outputs = model(images)
                     if val_loss == 0:
-                        output_ = outputs[0].numpy()
-                        output_concat = np.argmax(output_, axis=1)
-                        img = Image.fromarray(output_concat, mode='P')
-                        img.show()
+                        output_ = outputs.detach().numpy()[0]
+                        output_concat = np.argmax(output_, axis=0)
+                        img = Image.fromarray(np.uint8(output_concat), mode='P')
+                        palette_with_alpha_values = []
+                        for i in range(768):
+                            color = palette[i].numpy()[0]
+                            palette_with_alpha_values.append(color)
+                        img.putpalette(palette_with_alpha_values, "RGB")
                     loss = criterion(outputs, labels_one_hot)
 
                 val_loss += loss.item()
+
                 metric.update(outputs, labels)
 
             val_loss /= len(val_loader)
             pa, miou = metric.get_result()
 
-            wandb.log({'val_loss': val_loss, 'PA': pa, 'mIoU': miou}, step=epoch)
+            wandb.log({'img': wandb.Image(img), 'val_loss': val_loss, 'PA': pa, 'mIoU': miou}, step=epoch)
             print('====== Val loss : {:.4f} \tPA : {:.4f} \tmIoU : {:.4f} ======'.format(val_loss, pa, miou))
 
 

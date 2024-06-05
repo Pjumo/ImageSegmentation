@@ -35,12 +35,13 @@ class PascalVOCDataset(Dataset):
         label_path = self.label_paths[idx]
         image = Image.open(image_path).convert("RGB")
         label = Image.open(label_path).convert('P')
+        palette = label.getpalette()
         if self.image_transform:
             image = self.image_transform(image)
         if self.label_transform:
             label = self.label_transform(label)
         label = torch.squeeze(label).long()  # 레이블을 1D 텐서로 변환
-        return image, label
+        return image, label, palette
 
 
 def dataloader(batch_size):
