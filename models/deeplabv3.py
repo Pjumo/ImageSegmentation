@@ -108,8 +108,6 @@ class DeepLabHead(nn.Module):
 
 
 class AtrousSeparableConvolution(nn.Module):
-    """ Atrous Separable Convolution
-    """
 
     def __init__(self, in_channels, out_channels, kernel_size,
                  stride=1, padding=0, dilation=1, bias=True):
